@@ -1,0 +1,180 @@
+schema: '2.0'
+stages:
+  ingest:
+    cmd: python src/ingest.py
+    deps:
+    - path: params.yaml
+      hash: md5
+      md5: b83c6a6e34a77cb669f566db9b7b5625
+      size: 698
+      isexec: true
+    - path: src/ingest.py
+      hash: md5
+      md5: 475aadd4eabb8296f621842ad663fadb
+      size: 9283
+      isexec: true
+    params:
+      params.yaml:
+        data.dataset: ag_news
+        data.max_samples: 10000
+    outs:
+    - path: data/raw/test_raw.csv
+      hash: md5
+      md5: a5b45b9afe260254e884acc3383c1959
+      size: 249842
+      isexec: true
+    - path: data/raw/train_raw.csv
+      hash: md5
+      md5: 638c6a72051fb5abef03f94938913ec2
+      size: 2488499
+      isexec: true
+  preprocess:
+    cmd: python src/preprocess.py
+    deps:
+    - path: data/raw/test_raw.csv
+      hash: md5
+      md5: a5b45b9afe260254e884acc3383c1959
+      size: 249842
+      isexec: true
+    - path: data/raw/train_raw.csv
+      hash: md5
+      md5: 638c6a72051fb5abef03f94938913ec2
+      size: 2488499
+      isexec: true
+    - path: params.yaml
+      hash: md5
+      md5: b83c6a6e34a77cb669f566db9b7b5625
+      size: 698
+      isexec: true
+    - path: src/preprocess.py
+      hash: md5
+      md5: 9cf76d80feb15b08c170c27c3c0980f2
+      size: 4407
+      isexec: true
+    params:
+      params.yaml:
+        data.random_state: 42
+        data.test_size: 0.15
+        data.val_size: 0.15
+    outs:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: b90ca4bb854e33303ab96dc8fe8e120d
+      size: 408995
+      isexec: true
+    - path: data/processed/train.csv
+      hash: md5
+      md5: f0739e5a9f30144a5d360285f4f242f3
+      size: 1917870
+      isexec: true
+    - path: data/processed/val.csv
+      hash: md5
+      md5: 3d9a6eb127a9bd38da5802b76bf8ce1c
+      size: 407976
+      isexec: true
+  train:
+    cmd: python src/train.py
+    deps:
+    - path: data/processed/train.csv
+      hash: md5
+      md5: f0739e5a9f30144a5d360285f4f242f3
+      size: 1917870
+      isexec: true
+    - path: data/processed/val.csv
+      hash: md5
+      md5: 3d9a6eb127a9bd38da5802b76bf8ce1c
+      size: 407976
+      isexec: true
+    - path: params.yaml
+      hash: md5
+      md5: b83c6a6e34a77cb669f566db9b7b5625
+      size: 698
+      isexec: true
+    - path: src/train.py
+      hash: md5
+      md5: 256aff2ec29a9f2c02806daf1ce5a5d3
+      size: 20904
+      isexec: true
+    params:
+      params.yaml:
+        mlflow.experiment_name: production-news-classification
+        model:
+          type: tfidf_lr
+          max_features: 50000
+          ngram_range:
+          - 1
+          - 2
+        training:
+          learning_rate: 0.01
+          C: 1.0
+          max_iter: 1000
+          class_weight: balanced
+    outs:
+    - path: models/
+      hash: md5
+      md5: 87bf4d9ab576052e068c3338b81daf57.dir
+      size: 9603801
+      nfiles: 3
+  evaluate:
+    cmd: python src/evaluate.py
+    deps:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: b90ca4bb854e33303ab96dc8fe8e120d
+      size: 408995
+      isexec: true
+    - path: models/
+      hash: md5
+      md5: 87bf4d9ab576052e068c3338b81daf57.dir
+      size: 9603801
+      nfiles: 3
+    - path: params.yaml
+      hash: md5
+      md5: b83c6a6e34a77cb669f566db9b7b5625
+      size: 698
+      isexec: true
+    - path: src/evaluate.py
+      hash: md5
+      md5: 863690265c89574c4905f26ba608b39a
+      size: 5022
+      isexec: true
+    outs:
+    - path: reports/final_confusion_matrix.png
+      hash: md5
+      md5: 428d632d8eac9f40d0a9a066e084fce0
+      size: 97250
+      isexec: true
+    - path: reports/final_metrics.json
+      hash: md5
+      md5: e82a0f1cb4d24c9d91947bcb984f86f2
+      size: 110
+      isexec: true
+  monitor:
+    cmd: python monitoring/monitor.py
+    deps:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: b90ca4bb854e33303ab96dc8fe8e120d
+      size: 408995
+      isexec: true
+    - path: data/processed/train.csv
+      hash: md5
+      md5: f0739e5a9f30144a5d360285f4f242f3
+      size: 1917870
+      isexec: true
+    - path: monitoring/monitor.py
+      hash: md5
+      md5: 87928875d64b64ec0ec171d86b61bdc5
+      size: 11442
+      isexec: true
+    - path: params.yaml
+      hash: md5
+      md5: b83c6a6e34a77cb669f566db9b7b5625
+      size: 698
+      isexec: true
+    outs:
+    - path: reports/drift_report.html
+      hash: md5
+      md5: 2b6f54e3223e8b5fbe519ad38dce7a37
+      size: 1012
+      isexec: true

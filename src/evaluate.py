@@ -11,6 +11,7 @@ import json
 import logging
 import yaml
 import joblib
+import os
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -37,13 +38,19 @@ PARAMS = yaml.safe_load(open(ROOT / "params.yaml"))
 def load_production_model():
     """Load Production model from MLflow Registry, fallback to latest local pkl."""
     model_name = PARAMS["mlflow"]["registered_model_name"]
-    tracking_uri = PARAMS["mlflow"]["tracking_uri"]
+    #tracking_uri = PARAMS["mlflow"]["tracking_uri"]
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI",
+    PARAMS["mlflow"]["tracking_uri"],)
     mlflow.set_tracking_uri(tracking_uri)
 
     try:
-        model_uri = f"models:/{model_name}/Production"
+        #model_uri = f"models:/{model_name}/Production"
+        alias = PARAMS["serving"].get("model_alias","champion",)
+
+        model_uri = f"models:/{model_name}@{alias}"
         pipeline = mlflow.sklearn.load_model(model_uri)
-        log.info(f"✅  Loaded Production model from MLflow: {model_name}")
+        # log.info(f"✅  Loaded Production model from MLflow: {model_name}")
+        log.info(f"✅ Loaded @{alias} model from MLflow: {model_name}")
         return pipeline
     except Exception as e:
         log.warning(f"Could not load from MLflow ({e}), falling back to local pkl")
