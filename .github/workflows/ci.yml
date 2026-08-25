@@ -57,7 +57,7 @@ jobs:
           pip install \
             scikit-learn numpy pandas fastapi "uvicorn[standard]" pydantic \
             mlflow joblib pyyaml matplotlib seaborn \
-            pytest pytest-asyncio httpx evidently
+            pytest pytest-asyncio httpx evidently prometheus-fastapi-instrumentator
 
       - name: Generate synthetic CI data (no HuggingFace download needed)
         run: |
