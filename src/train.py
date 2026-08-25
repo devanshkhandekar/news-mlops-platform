@@ -37,6 +37,21 @@ import mlflow
 import mlflow.sklearn
 from mlflow.models.signature import infer_signature
 
+
+# ---------------------------------------------------------------------------
+# Safe sklearn serialization configuration for MLflow/skops
+#
+# CalibratedClassifierCV internally creates these two sklearn classes.
+# They are part of the locally trained sklearn model and are explicitly
+# trusted so MLflow can store the calibrated SVM using the pickle-free
+# skops serialization format.
+# ---------------------------------------------------------------------------
+SKOPS_TRUSTED_TYPES = [
+    "sklearn.calibration._CalibratedClassifier",
+    "sklearn.calibration._SigmoidCalibration",
+]
+
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger(__name__)
 
@@ -213,13 +228,22 @@ def run_experiment(
         signature  = infer_signature(train["text"].head(5), pipeline.predict(train["text"].head(5)))
         input_ex   = train["text"].head(3).tolist()
 
-        mlflow.sklearn.log_model(
-            sk_model       = pipeline,
-            artifact_path  = "model",
-            signature      = signature,
-            input_example  = input_ex,
-            registered_model_name = None,  # we register the best one later
-        )
+        # mlflow.sklearn.log_model(
+        #     sk_model       = pipeline,
+        #     artifact_path  = "model",
+        #     signature      = signature,
+        #     input_example  = input_ex,
+        #     registered_model_name = None,  # we register the best one later
+        # )
+
+        mlflow.sklearn.log_model(sk_model=pipeline,artifact_path="model",signature=signature,input_example=input_ex,registered_model_name=None,
+
+        # MLflow 3.x uses skops for safer sklearn serialization.
+        serialization_format="skops",
+
+        # Required for CalibratedClassifierCV because sklearn creates
+        # these internal calibration classes during fitting.
+        skops_trusted_types=SKOPS_TRUSTED_TYPES,)
 
         # ── Save locally too ──────────────────────────────────────────────────
         model_dir = ROOT / "models"
@@ -269,7 +293,107 @@ def register_best_model(
     log.info(f"✅  Registered '{model_name}' version {mv.version}")
 
     # Transition to Staging → Production
+    #client = mlflow.MlflowClient()
+        # ------------------------------------------------------------------
+    # MLflow 3.x alias-based promotion
+    # ------------------------------------------------------------------
     client = mlflow.MlflowClient()
+
+    candidate_alias = PARAMS["mlflow"].get(
+        "candidate_alias", "candidate"
+    )
+
+    champion_alias = PARAMS["mlflow"].get(
+        "champion_alias", "champion"
+    )
+
+    promotion_min_delta = float(
+        PARAMS["mlflow"].get("promotion_min_delta", 0.0)
+    )
+
+    # Every model that passes the absolute quality gate becomes a candidate.
+    client.set_registered_model_alias(
+        name=model_name,
+        alias=candidate_alias,
+        version=mv.version,
+    )
+
+    client.set_model_version_tag(
+        name=model_name,
+        version=mv.version,
+        key="validation_accuracy",
+        value=f"{val_accuracy:.6f}",
+    )
+
+    client.set_model_version_tag(
+        name=model_name,
+        version=mv.version,
+        key="test_accuracy",
+        value=f"{metrics['accuracy']:.6f}",
+    )
+
+    # Compare against the currently deployed champion, if one exists.
+    previous_champion = None
+    previous_accuracy = None
+
+    try:
+        previous_champion = client.get_model_version_by_alias(
+            model_name,
+            champion_alias,
+        )
+
+        previous_run = client.get_run(
+            previous_champion.run_id
+        )
+
+        previous_accuracy = previous_run.data.metrics.get(
+            "val_accuracy"
+        )
+
+    except Exception:
+        log.info(
+            "No existing champion found. "
+            "Candidate can become the first champion."
+        )
+
+    should_promote = (
+        previous_accuracy is None
+        or val_accuracy >= previous_accuracy + promotion_min_delta
+    )
+
+    if should_promote:
+
+        client.set_registered_model_alias(
+            name=model_name,
+            alias=champion_alias,
+            version=mv.version,
+        )
+
+        client.set_model_version_tag(
+            name=model_name,
+            version=mv.version,
+            key="promotion_status",
+            value="champion",
+        )
+
+        log.info(
+            f"🚀 Model v{mv.version} promoted to @{champion_alias}"
+        )
+
+    else:
+
+        client.set_model_version_tag(
+            name=model_name,
+            version=mv.version,
+            key="promotion_status",
+            value="candidate_only",
+        )
+
+        log.info(
+            f"Candidate v{mv.version} retained as @{candidate_alias}. "
+            f"Current champion accuracy={previous_accuracy:.4f}, "
+            f"candidate accuracy={val_accuracy:.4f}"
+        )
     client.transition_model_version_stage(
         name    = model_name,
         version = mv.version,
@@ -330,7 +454,10 @@ EXPERIMENT_CONFIGS = [
 
 def main():
     # ── MLflow setup ──────────────────────────────────────────────────────────
-    tracking_uri = PARAMS["mlflow"]["tracking_uri"]
+    #tracking_uri = PARAMS["mlflow"]["tracking_uri"]
+    tracking_uri = os.getenv(
+    "MLFLOW_TRACKING_URI",
+    PARAMS["mlflow"]["tracking_uri"],)
     exp_name     = PARAMS["mlflow"]["experiment_name"]
 
     mlflow.set_tracking_uri(tracking_uri)

@@ -21,12 +21,13 @@ services:
   # MLflow tracking server
   # ─────────────────────────────────────────────────────────────────────────
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.8.1
+    image: ghcr.io/mlflow/mlflow:v3.15.1
     container_name: mlops_mlflow
     command: >
       mlflow server
         --host 0.0.0.0
         --port 5000
+        --allowed-hosts "mlflow:5000,localhost:5000,127.0.0.1:5000"
         --backend-store-uri sqlite:///mlruns/mlflow.db
         --default-artifact-root /mlruns/artifacts
     ports:
@@ -98,7 +99,7 @@ services:
       - ./data:/app/data
       - ./src:/app/src
       - ./params.yaml:/app/params.yaml
-      - model_artifacts:/app/models
+      - ./models:/app/models
       - ./reports:/app/reports
     networks:
       - mlops_net

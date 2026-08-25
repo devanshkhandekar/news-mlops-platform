@@ -27,7 +27,8 @@ RUN pip install --upgrade pip \
         pyyaml \
         matplotlib \
         seaborn \
-        evidently
+        evidently \
+        prometheus-fastapi-instrumentator
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: Runtime — lean production image

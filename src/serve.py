@@ -30,7 +30,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
-
+from prometheus_fastapi_instrumentator import Instrumentator
 log = logging.getLogger("uvicorn.error")
 
 ROOT   = Path(__file__).resolve().parent.parent
@@ -57,19 +57,34 @@ def _load_model():
 
     tracking_uri = PARAMS["mlflow"]["tracking_uri"]
     model_name   = PARAMS["mlflow"]["registered_model_name"]
-    stage        = PARAMS["serving"]["model_stage"]
-
+    #stage        = PARAMS["serving"]["model_stage"]
+    alias = PARAMS["serving"].get("model_alias","champion",)
     mlflow.set_tracking_uri(tracking_uri)
 
     try:
-        model_uri = f"models:/{model_name}/{stage}"
-        pipeline  = mlflow.sklearn.load_model(model_uri)
+        # model_uri = f"models:/{model_name}/{stage}"
+        # pipeline  = mlflow.sklearn.load_model(model_uri)
 
-        # Fetch version metadata
+        # # Fetch version metadata
+        # client = mlflow.MlflowClient()
+        # versions = client.get_latest_versions(model_name, stages=[stage])
+        # version  = versions[0].version if versions else "unknown"
+        # run_id   = versions[0].run_id  if versions else None
+        model_uri = f"models:/{model_name}@{alias}"
+
+        pipeline = mlflow.sklearn.load_model(
+            model_uri
+        )
+
         client = mlflow.MlflowClient()
-        versions = client.get_latest_versions(model_name, stages=[stage])
-        version  = versions[0].version if versions else "unknown"
-        run_id   = versions[0].run_id  if versions else None
+
+        model_version = client.get_model_version_by_alias(
+            model_name,
+            alias,
+        )
+
+        version = model_version.version
+        run_id = model_version.run_id
 
         metrics = {}
         if run_id:
@@ -82,7 +97,8 @@ def _load_model():
             "metrics"      : metrics,
             "loaded_at"    : time.strftime("%Y-%m-%dT%H:%M:%SZ"),
         })
-        log.info(f"✅  Loaded model '{model_name}' v{version} from MLflow ({stage})")
+        #log.info(f"✅  Loaded model '{model_name}' v{version} from MLflow ({stage})")
+        log.info(f"✅ Loaded '{model_name}' "f"v{version} from MLflow @{alias}")
 
     except Exception as e:
         log.warning(f"MLflow load failed ({e}), falling back to local pkl …")
@@ -265,6 +281,12 @@ async def reload_model():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+Instrumentator().instrument(app).expose(
+    app,
+    endpoint="/metrics",
+    include_in_schema=False,
+)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Run directly
