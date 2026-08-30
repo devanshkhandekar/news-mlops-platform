@@ -35,6 +35,12 @@ log = logging.getLogger("uvicorn.error")
 
 ROOT   = Path(__file__).resolve().parent.parent
 PARAMS = yaml.safe_load(open(ROOT / "params.yaml"))
+AG_NEWS_LABELS = [
+    "World",
+    "Sports",
+    "Business",
+    "Sci/Tech",
+]
 
 # ── Global state ──────────────────────────────────────────────────────────────
 MODEL_STATE = {
@@ -55,7 +61,10 @@ def _load_model():
     import mlflow
     import mlflow.sklearn
 
-    tracking_uri = PARAMS["mlflow"]["tracking_uri"]
+    # tracking_uri = PARAMS["mlflow"]["tracking_uri"]
+    tracking_uri = os.getenv(
+    "MLFLOW_TRACKING_URI",
+    PARAMS["mlflow"]["tracking_uri"],)
     model_name   = PARAMS["mlflow"]["registered_model_name"]
     #stage        = PARAMS["serving"]["model_stage"]
     alias = PARAMS["serving"].get("model_alias","champion",)
@@ -118,11 +127,19 @@ def _load_model():
 
     # Infer label names
     try:
-        MODEL_STATE["label_names"] = list(
-            MODEL_STATE["pipeline"].classes_.astype(str)
+        classes = list(
+            MODEL_STATE["pipeline"].classes_.astype(int)
         )
+    
+        if classes == [0, 1, 2, 3]:
+            MODEL_STATE["label_names"] = AG_NEWS_LABELS
+        else:
+            MODEL_STATE["label_names"] = [
+                str(x) for x in classes
+            ]
+    
     except Exception:
-        MODEL_STATE["label_names"] = [str(i) for i in range(10)]
+        MODEL_STATE["label_names"] = AG_NEWS_LABELS
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -202,7 +219,7 @@ async def model_info():
         "label_names"  : MODEL_STATE["label_names"],
         "metrics"      : MODEL_STATE["metrics"],
         "loaded_at"    : MODEL_STATE["loaded_at"],
-        "tracking_uri" : PARAMS["mlflow"]["tracking_uri"],
+        "tracking_uri": os.getenv("MLFLOW_TRACKING_URI",PARAMS["mlflow"]["tracking_uri"],),
     }
 
 
