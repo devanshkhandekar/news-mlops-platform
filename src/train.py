@@ -394,17 +394,17 @@ def register_best_model(
             f"Current champion accuracy={previous_accuracy:.4f}, "
             f"candidate accuracy={val_accuracy:.4f}"
         )
-    client.transition_model_version_stage(
-        name    = model_name,
-        version = mv.version,
-        stage   = "Staging",
-    )
-    client.transition_model_version_stage(
-        name    = model_name,
-        version = mv.version,
-        stage   = "Production",
-    )
-    log.info(f"🚀  Model transitioned to Production")
+    # client.transition_model_version_stage(
+    #     name    = model_name,
+    #     version = mv.version,
+    #     stage   = "Staging",
+    # )
+    # client.transition_model_version_stage(
+    #     name    = model_name,
+    #     version = mv.version,
+    #     stage   = "Production",
+    # )
+    # log.info(f"🚀  Model transitioned to Production")
 
     # Add description
     client.update_model_version(
